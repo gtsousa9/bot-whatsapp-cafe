@@ -21,21 +21,23 @@ app.post("/webhook", async (req, res) => {
 
     const body = req.body || {};
 
+    // 📞 Captura correta do telefone
     const phone =
-      body.phone ||
+      body.senderPn ||
+      body?.data?.senderPn ||
+      body?.data?.cleanedSenderPn ||
+      body?.data?.messages?.senderPn ||
       body.from ||
-      body.sender ||
-      body?.data?.phone ||
-      body?.data?.from ||
-      body?.data?.sender;
+      body.phone;
 
+    // 💬 Captura correta da mensagem
     const message =
+      body.messageBody ||
+      body?.data?.messageBody ||
+      body?.data?.messages?.messageBody ||
+      body?.data?.messages?.conversation ||
       body.message ||
-      body.text ||
-      body.body ||
-      body?.data?.message ||
-      body?.data?.text ||
-      body?.data?.body;
+      body.text;
 
     if (!phone || !message) {
       console.log("⚠️ Ignorado: sem phone ou message");
@@ -46,10 +48,11 @@ app.post("/webhook", async (req, res) => {
 
     const resposta = gerarResposta(phone, message);
 
+    // 📤 Enviar resposta ao cliente via Wasender
     await axios.post(
       "https://api.wasenderapi.com/send-message",
       {
-        phone: phone,
+        phone: phone.replace("@s.whatsapp.net", ""),
         message: resposta,
       },
       {
@@ -60,9 +63,10 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
+    // 📊 Salvar no Google Sheets se finalizado
     if (pedidos[phone]?.finalizado) {
       await axios.post(GOOGLE_SHEET_WEBHOOK, {
-        phone: phone,
+        phone: phone.replace("@s.whatsapp.net", ""),
         torra: pedidos[phone].torra,
         moagem: pedidos[phone].moagem,
         tamanho: pedidos[phone].tamanho,

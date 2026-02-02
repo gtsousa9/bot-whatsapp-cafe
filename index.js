@@ -1,65 +1,8 @@
-const express = require("express");
-const axios = require("axios");
-
-const app = express();
-app.use(express.json());
-
-const PORT = process.env.PORT || 8080;
-const WASENDER_API_KEY = process.env.WASENDER_API_KEY;
-
-// Página inicial (teste no navegador)
-app.get("/", (req, res) => {
-  res.status(200).send("🤖 Bot WhatsApp Café rodando!");
-});
-
-// Memória simples de pedidos
-const pedidos = {};
-
-// Webhook da Wasender
-app.post("/webhook", async (req, res) => {
-  try {
-    console.log("Payload recebido:", JSON.stringify(req.body, null, 2));
-
-    const msg = req.body?.data?.messages;
-    const phone = msg?.key?.cleanedSenderPn;
-    const message = msg?.messageBody;
-
-    if (!phone || !message) {
-      console.log("⚠️ Ignorado: sem phone ou message");
-      return res.sendStatus(200);
-    }
-
-    console.log("Mensagem:", message, "De:", phone);
-
-    const resposta = gerarResposta(phone, message);
-
-    // Enviar resposta via Wasender
-    await axios.post(
-      "https://api.wasenderapi.com/api/send-message",
-      {
-        to: phone,
-        text: resposta,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WASENDER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ Erro no webhook:", err?.response?.data || err.message);
-    res.sendStatus(500);
-  }
-});
-
-// Função que controla o fluxo do pedido
 function gerarResposta(phone, texto) {
   texto = texto.toLowerCase().trim();
 
-  if (!pedidos[phone] || ["menu", "oi", "olá", "ola"].includes(texto)) {
+  // Se não existir pedido ativo, inicia sempre
+  if (!pedidos[phone]) {
     pedidos[phone] = {};
     return (
       "Olá! ☕ Bem-vindo à nossa loja de cafés!\n\n" +
@@ -124,10 +67,6 @@ function gerarResposta(phone, texto) {
     );
   }
 
-  return "Digite 'menu' para iniciar um novo pedido.";
+  // Se já finalizou
+  return "Seu pedido já foi registrado! Se quiser fazer outro, digite qualquer mensagem. ☕";
 }
-
-// Inicializa o servidor
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});

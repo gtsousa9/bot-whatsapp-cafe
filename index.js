@@ -7,31 +7,36 @@ app.use(bodyParser.json());
 
 const PORT = process.env.PORT || 3000;
 
-// 🔐 Variáveis de ambiente
 const WASENDER_API_KEY = process.env.WASENDER_API_KEY;
 const GOOGLE_SHEET_WEBHOOK = process.env.GOOGLE_SHEET_WEBHOOK;
 
-// 🟢 Rota de verificação
+// 🟢 Rota de status
 app.get("/", (req, res) => {
-  res.send("🤖 Bot WhatsApp Café rodando com sucesso!");
+  res.send("🤖 Bot WhatsApp Café rodando!");
 });
 
-// 🟢 Webhook para receber mensagens do WhatsApp
+// 🧠 Armazenamento temporário de conversas
+const pedidos = {};
+
+// 🟢 Webhook para mensagens
 app.post("/webhook", async (req, res) => {
   try {
-    const message = req.body.message;
-    const phone = req.body.phone;
+    const { phone, message } = req.body;
+
+    if (!phone || !message) {
+      return res.sendStatus(200);
+    }
 
     console.log("Mensagem recebida:", message, "de", phone);
 
-    const reply = gerarResposta(message);
+    const resposta = gerarResposta(phone, message);
 
     // Enviar resposta ao cliente
     await axios.post(
       "https://api.wasenderapi.com/send-message",
       {
         phone: phone,
-        message: reply,
+        message: resposta,
       },
       {
         headers: {
@@ -41,13 +46,16 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
-    // Salvar pedido no Google Sheets (se for pedido válido)
-    if (reply.includes("Resumo do pedido")) {
+    // Se o pedido estiver completo, salva no Google Sheets
+    if (pedidos[phone]?.finalizado) {
       await axios.post(GOOGLE_SHEET_WEBHOOK, {
         phone: phone,
-        message: message,
-        timestamp: new Date().toISOString(),
+        torra: pedidos[phone].torra,
+        moagem: pedidos[phone].moagem,
+        tamanho: pedidos[phone].tamanho,
       });
+
+      delete pedidos[phone]; // limpa após salvar
     }
 
     res.sendStatus(200);
@@ -58,50 +66,54 @@ app.post("/webhook", async (req, res) => {
 });
 
 // 🔵 Lógica do bot
-function gerarResposta(texto) {
-  texto = texto.toLowerCase();
+function gerarResposta(phone, texto) {
+  texto = texto.trim().toLowerCase();
 
-  if (texto.includes("oi") || texto.includes("olá")) {
-    return `Olá! 👋 Seja bem-vindo à nossa loja de cafés ☕
-Temos:
-1️⃣ Torra clara
-2️⃣ Torra média
-3️⃣ Torra escura
-
-Responda com o número da torra desejada.`;
+  // Inicializa conversa
+  if (!pedidos[phone] || texto === "menu" || texto === "oi" || texto === "olá") {
+    pedidos[phone] = {};
+    return `Olá! ☕ Seja bem-vindo à nossa loja de cafés!\n\nEscolha a torra:\n1️⃣ Clara\n2️⃣ Média\n3️⃣ Escura\n\nResponda com o número da opção.`;
   }
 
-  if (texto === "1" || texto === "2" || texto === "3") {
-    return `Perfeito! Agora escolha a moagem:
-1️⃣ Em grãos
-2️⃣ Moagem fina
-3️⃣ Moagem média
-4️⃣ Moagem grossa
+  const pedido = pedidos[phone];
 
-Responda com o número.`;
+  // Etapa 1 — Torra
+  if (!pedido.torra) {
+    if (texto === "1") pedido.torra = "Clara";
+    else if (texto === "2") pedido.torra = "Média";
+    else if (texto === "3") pedido.torra = "Escura";
+    else return "Por favor, escolha a torra digitando 1, 2 ou 3.";
+
+    return `Perfeito! ☕ Agora escolha a moagem:\n1️⃣ Em grãos\n2️⃣ Fina\n3️⃣ Média\n4️⃣ Grossa\n\nResponda com o número.`;
   }
 
-  if (["1", "2", "3", "4"].includes(texto)) {
-    return `Ótimo! Agora escolha o tamanho:
-1️⃣ 250g
-2️⃣ 500g
+  // Etapa 2 — Moagem
+  if (!pedido.moagem) {
+    if (texto === "1") pedido.moagem = "Em grãos";
+    else if (texto === "2") pedido.moagem = "Fina";
+    else if (texto === "3") pedido.moagem = "Média";
+    else if (texto === "4") pedido.moagem = "Grossa";
+    else return "Por favor, escolha a moagem digitando 1, 2, 3 ou 4.";
 
-Responda com o número.`;
+    return `Ótimo! 📦 Agora escolha o tamanho:\n1️⃣ 250g\n2️⃣ 500g\n\nResponda com o número.`;
   }
 
-  if (texto === "1" || texto === "2") {
-    return `✅ Resumo do pedido:
-Café especial ☕
-Sua escolha foi registrada!
+  // Etapa 3 — Tamanho
+  if (!pedido.tamanho) {
+    if (texto === "1") pedido.tamanho = "250g";
+    else if (texto === "2") pedido.tamanho = "500g";
+    else return "Por favor, escolha o tamanho digitando 1 ou 2.";
 
-Em breve entraremos em contato para pagamento e entrega.`;
+    pedido.finalizado = true;
+
+    return `✅ Pedido confirmado!\n\nResumo:\n☕ Torra: ${pedido.torra}\n⚙️ Moagem: ${pedido.moagem}\n📦 Tamanho: ${pedido.tamanho}\n\nEm breve entraremos em contato para pagamento e entrega. Obrigado! 🙌`;
   }
 
-  return `Desculpe, não entendi 😅
-Digite "oi" para começar seu pedido.`;
+  return "Digite 'menu' para iniciar um novo pedido.";
 }
 
-// 🚀 Iniciar servidor
+// 🚀 Inicia servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
+

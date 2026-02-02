@@ -1,17 +1,16 @@
 const express = require("express");
 const axios = require("axios");
-const bodyParser = require("body-parser");
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 const WASENDER_API_KEY = process.env.WASENDER_API_KEY;
 const GOOGLE_SHEET_WEBHOOK = process.env.GOOGLE_SHEET_WEBHOOK;
 
 app.get("/", (req, res) => {
-  res.send("🤖 Bot WhatsApp Café rodando!");
+  res.status(200).send("🤖 Bot WhatsApp Café rodando!");
 });
 
 const pedidos = {};
@@ -20,24 +19,26 @@ app.post("/webhook", async (req, res) => {
   try {
     console.log("Payload recebido:", JSON.stringify(req.body, null, 2));
 
-    const body = req.body;
+    const body = req.body || {};
 
     const phone =
       body.phone ||
       body.from ||
       body.sender ||
       body?.data?.phone ||
-      body?.data?.from;
+      body?.data?.from ||
+      body?.data?.sender;
 
     const message =
       body.message ||
       body.text ||
+      body.body ||
       body?.data?.message ||
       body?.data?.text ||
       body?.data?.body;
 
     if (!phone || !message) {
-      console.log("⚠️ Payload ignorado (sem phone ou message).");
+      console.log("⚠️ Ignorado: sem phone ou message");
       return res.sendStatus(200);
     }
 
@@ -78,7 +79,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 function gerarResposta(phone, texto) {
-  texto = texto.trim().toLowerCase();
+  texto = texto.toLowerCase().trim();
 
   if (!pedidos[phone] || texto === "menu" || texto === "oi" || texto === "olá") {
     pedidos[phone] = {};

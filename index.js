@@ -13,7 +13,7 @@ app.get("/", (req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("Payload recebido:", JSON.stringify(req.body, null, 2));
+    console.log("Mensagem recebida!");
 
     const msg = req.body?.data?.messages;
     const phone = msg?.key?.cleanedSenderPn;
@@ -24,10 +24,10 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    console.log("Mensagem:", message, "De:", phone);
+    console.log("Texto:", message, "De:", phone);
 
     await axios.post(
-      "https://api.wasenderapi.com/send-message",
+      "https://api.wasenderapi.com/api/send-message",
       {
         phone: phone,
         message: "Olá! Seu bot está funcionando! ☕",
@@ -42,7 +42,7 @@ app.post("/webhook", async (req, res) => {
 
     res.sendStatus(200);
   } catch (err) {
-    console.error("❌ Erro no webhook:", err?.response?.data || err.message);
+    console.error("Erro:", err?.response?.data || err.message);
     res.sendStatus(500);
   }
 });

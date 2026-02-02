@@ -10,20 +10,34 @@ const PORT = process.env.PORT || 3000;
 const WASENDER_API_KEY = process.env.WASENDER_API_KEY;
 const GOOGLE_SHEET_WEBHOOK = process.env.GOOGLE_SHEET_WEBHOOK;
 
-// 🟢 Rota de status
 app.get("/", (req, res) => {
   res.send("🤖 Bot WhatsApp Café rodando!");
 });
 
-// 🧠 Armazenamento temporário de conversas
 const pedidos = {};
 
-// 🟢 Webhook para mensagens
 app.post("/webhook", async (req, res) => {
   try {
-    const { phone, message } = req.body;
+    console.log("Payload recebido:", JSON.stringify(req.body, null, 2));
+
+    const body = req.body;
+
+    const phone =
+      body.phone ||
+      body.from ||
+      body.sender ||
+      body?.data?.phone ||
+      body?.data?.from;
+
+    const message =
+      body.message ||
+      body.text ||
+      body?.data?.message ||
+      body?.data?.text ||
+      body?.data?.body;
 
     if (!phone || !message) {
+      console.log("⚠️ Payload ignorado (sem phone ou message).");
       return res.sendStatus(200);
     }
 
@@ -31,7 +45,6 @@ app.post("/webhook", async (req, res) => {
 
     const resposta = gerarResposta(phone, message);
 
-    // Enviar resposta ao cliente
     await axios.post(
       "https://api.wasenderapi.com/send-message",
       {
@@ -46,7 +59,6 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
-    // Se o pedido estiver completo, salva no Google Sheets
     if (pedidos[phone]?.finalizado) {
       await axios.post(GOOGLE_SHEET_WEBHOOK, {
         phone: phone,
@@ -55,21 +67,19 @@ app.post("/webhook", async (req, res) => {
         tamanho: pedidos[phone].tamanho,
       });
 
-      delete pedidos[phone]; // limpa após salvar
+      delete pedidos[phone];
     }
 
     res.sendStatus(200);
   } catch (error) {
-    console.error("Erro no webhook:", error);
+    console.error("❌ Erro no webhook:", error);
     res.sendStatus(500);
   }
 });
 
-// 🔵 Lógica do bot
 function gerarResposta(phone, texto) {
   texto = texto.trim().toLowerCase();
 
-  // Inicializa conversa
   if (!pedidos[phone] || texto === "menu" || texto === "oi" || texto === "olá") {
     pedidos[phone] = {};
     return `Olá! ☕ Seja bem-vindo à nossa loja de cafés!\n\nEscolha a torra:\n1️⃣ Clara\n2️⃣ Média\n3️⃣ Escura\n\nResponda com o número da opção.`;
@@ -77,7 +87,6 @@ function gerarResposta(phone, texto) {
 
   const pedido = pedidos[phone];
 
-  // Etapa 1 — Torra
   if (!pedido.torra) {
     if (texto === "1") pedido.torra = "Clara";
     else if (texto === "2") pedido.torra = "Média";
@@ -87,7 +96,6 @@ function gerarResposta(phone, texto) {
     return `Perfeito! ☕ Agora escolha a moagem:\n1️⃣ Em grãos\n2️⃣ Fina\n3️⃣ Média\n4️⃣ Grossa\n\nResponda com o número.`;
   }
 
-  // Etapa 2 — Moagem
   if (!pedido.moagem) {
     if (texto === "1") pedido.moagem = "Em grãos";
     else if (texto === "2") pedido.moagem = "Fina";
@@ -98,7 +106,6 @@ function gerarResposta(phone, texto) {
     return `Ótimo! 📦 Agora escolha o tamanho:\n1️⃣ 250g\n2️⃣ 500g\n\nResponda com o número.`;
   }
 
-  // Etapa 3 — Tamanho
   if (!pedido.tamanho) {
     if (texto === "1") pedido.tamanho = "250g";
     else if (texto === "2") pedido.tamanho = "500g";
@@ -112,8 +119,6 @@ function gerarResposta(phone, texto) {
   return "Digite 'menu' para iniciar um novo pedido.";
 }
 
-// 🚀 Inicia servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
-

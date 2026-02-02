@@ -19,25 +19,10 @@ app.post("/webhook", async (req, res) => {
   try {
     console.log("Payload recebido:", JSON.stringify(req.body, null, 2));
 
-    const body = req.body || {};
+    const msg = req.body?.data?.messages;
 
-    // 📞 Captura correta do telefone
-    const phone =
-      body.senderPn ||
-      body?.data?.senderPn ||
-      body?.data?.cleanedSenderPn ||
-      body?.data?.messages?.senderPn ||
-      body.from ||
-      body.phone;
-
-    // 💬 Captura correta da mensagem
-    const message =
-      body.messageBody ||
-      body?.data?.messageBody ||
-      body?.data?.messages?.messageBody ||
-      body?.data?.messages?.conversation ||
-      body.message ||
-      body.text;
+    const phone = msg?.key?.cleanedSenderPn || msg?.key?.senderPn;
+    const message = msg?.messageBody || msg?.message?.conversation;
 
     if (!phone || !message) {
       console.log("⚠️ Ignorado: sem phone ou message");
@@ -48,11 +33,11 @@ app.post("/webhook", async (req, res) => {
 
     const resposta = gerarResposta(phone, message);
 
-    // 📤 Enviar resposta ao cliente via Wasender
+    // 📤 Enviar resposta via Wasender
     await axios.post(
       "https://api.wasenderapi.com/send-message",
       {
-        phone: phone.replace("@s.whatsapp.net", ""),
+        phone: phone,
         message: resposta,
       },
       {
@@ -66,7 +51,7 @@ app.post("/webhook", async (req, res) => {
     // 📊 Salvar no Google Sheets se finalizado
     if (pedidos[phone]?.finalizado) {
       await axios.post(GOOGLE_SHEET_WEBHOOK, {
-        phone: phone.replace("@s.whatsapp.net", ""),
+        phone,
         torra: pedidos[phone].torra,
         moagem: pedidos[phone].moagem,
         tamanho: pedidos[phone].tamanho,
@@ -77,7 +62,7 @@ app.post("/webhook", async (req, res) => {
 
     res.sendStatus(200);
   } catch (error) {
-    console.error("❌ Erro no webhook:", error);
+    console.error("❌ Erro no webhook:", error?.response?.data || error.message);
     res.sendStatus(500);
   }
 });
@@ -85,7 +70,7 @@ app.post("/webhook", async (req, res) => {
 function gerarResposta(phone, texto) {
   texto = texto.toLowerCase().trim();
 
-  if (!pedidos[phone] || texto === "menu" || texto === "oi" || texto === "olá") {
+  if (!pedidos[phone] || ["menu", "oi", "olá", "ola"].includes(texto)) {
     pedidos[phone] = {};
     return `Olá! ☕ Seja bem-vindo à nossa loja de cafés!\n\nEscolha a torra:\n1️⃣ Clara\n2️⃣ Média\n3️⃣ Escura\n\nResponda com o número da opção.`;
   }
